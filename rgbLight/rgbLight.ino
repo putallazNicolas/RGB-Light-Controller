@@ -3,46 +3,77 @@
 const char* ssid = ""; // Nombre de la red WiFi
 const char* password = ""; // Contraseña de la red WiFi
 
+//En lo siguiente reemplaza puntos por comas
+IPAddress local_IP(); // Cambia a una IP dentro del rango de tu red
+IPAddress gateway();    // La puerta de enlace suele ser la dirección del router
+IPAddress subnet();
+
 const int ledPin = D5; // Pin donde está conectado el LED
+const int statusLed = D1;
 
 WiFiServer server(80);
 
-void setup() {
+const char* htmlContent = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Control del LED</title>
+</head>
+<body>
+  <h1>Control del LED</h1>
+  <p><a href="/LED=ON"><button>Encender</button></a></p>
+  <p><a href="/LED=OFF"><button>Apagar</button></a></p>
+</body>
+</html>
+)rawliteral";
+
+void setup() 
+{
   Serial.begin(9600);
   delay(10);
 
   pinMode(ledPin, OUTPUT);
+  pinMode(statusLed, OUTPUT);
   digitalWrite(ledPin, LOW); // LED apagado al inicio
 
+  // Configurar IP estática
+  if (!WiFi.config(local_IP, gateway, subnet)) 
+  {
+    Serial.println("Error al configurar la IP estática");
+  }
+
   // Conectar al WiFi
-  Serial.println();
   Serial.print("Conectando a ");
   Serial.println(ssid);
   WiFi.begin(ssid, password);
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+  while (WiFi.status() != WL_CONNECTED) 
+  {
+    digitalWrite(statusLed, LOW);
+    delay(182);
+    digitalWrite(statusLed, HIGH);
+    delay(182);
     Serial.print(".");
   }
 
-  Serial.println("");
-  Serial.println("WiFi conectado");
+  Serial.println();
+  Serial.println("Conectado al WiFi");
   Serial.print("Dirección IP: ");
   Serial.println(WiFi.localIP());
-
-  // Iniciar el servidor
   server.begin();
-  Serial.println("Servidor iniciado");
 }
 
-void loop() {
+void loop() 
+{
   WiFiClient client = server.available();
-  if (!client) {
+  if (!client) 
+  {
     return;
   }
 
   // Esperar a que el cliente envíe datos
-  while(!client.available()) {
+  while(!client.available()) 
+  {
     delay(1);
   }
 
@@ -51,21 +82,15 @@ void loop() {
   client.flush();
 
   // Comprobar la solicitud
-  if (request.indexOf("/LED=ON") != -1) {
+  if (request.indexOf("/LED=ON") != -1) 
+  {
     digitalWrite(ledPin, HIGH); // Enciende el LED
-  } else if (request.indexOf("/LED=OFF") != -1) {
+  } 
+  else if (request.indexOf("/LED=OFF") != -1) 
+  {
     digitalWrite(ledPin, LOW); // Apaga el LED
   }
 
   // Respuesta HTML al cliente
-  client.println("HTTP/1.1 200 OK");
-  client.println("Content-Type: text/html");
-  client.println("");
-  client.println("<!DOCTYPE HTML>");
-  client.println("<html>");
-  client.println("<h1>Control del LED</h1>");
-  client.println("<p><a href=\"/LED=ON\"><button>Encender</button></a></p>");
-  client.println("<p><a href=\"/LED=OFF\"><button>Apagar</button></a></p>");
-  client.println("</html>");
-  delay(1);
+  client.println(htmlContent);
 }

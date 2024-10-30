@@ -1,7 +1,7 @@
 #include <ESP8266WiFi.h>
 
-const char* ssid = "Fibertel 999-2.4GHz"; // Nombre de la red WiFi
-const char* password = "01427544721"; // Contraseña de la red WiFi
+const char* ssid = ""; // Nombre de la red WiFi
+const char* password = ""; // Contraseña de la red WiFi
 
 const int ledPin = D5; // Pin donde está conectado el LED
 

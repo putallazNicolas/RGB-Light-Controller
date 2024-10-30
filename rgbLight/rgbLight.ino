@@ -1,12 +1,12 @@
 #include <ESP8266WiFi.h>
 
-const char* ssid = ""; // Nombre de la red WiFi
-const char* password = ""; // Contraseña de la red WiFi
+const char* ssid = "Fibertel 999-2.4GHz"; // Nombre de la red WiFi
+const char* password = "01427544721"; // Contraseña de la red WiFi
 
 //En lo siguiente reemplaza puntos por comas
-IPAddress local_IP(); // Cambia a una IP dentro del rango de tu red
-IPAddress gateway();    // La puerta de enlace suele ser la dirección del router
-IPAddress subnet();
+IPAddress local_IP(192, 168, 0, 50); // Cambia a una IP dentro del rango de tu red
+IPAddress gateway(192, 168, 0, 1);    // La puerta de enlace suele ser la dirección del router
+IPAddress subnet(255, 255, 255, 0);
 
 const int ledPin = D5; // Pin donde está conectado el LED
 const int statusLed = D1;
@@ -17,12 +17,16 @@ const char* htmlContent = R"rawliteral(
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Control del LED</title>
-</head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Control del LED</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  </head>
 <body>
   <h1>Control del LED</h1>
-  <p><a href="/LED=ON"><button>Encender</button></a></p>
-  <p><a href="/LED=OFF"><button>Apagar</button></a></p>
+  <p><a href="/LED=ON" ><button class="btn btn-primary" type="button">Encender</button></a></p>
+  <p><a href="/LED=OFF"><button class="btn btn-primary" type="button">Apagar</button></a></p>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 </body>
 </html>
 )rawliteral";

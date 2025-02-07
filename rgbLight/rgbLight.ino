@@ -6,56 +6,113 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include "config.h"
-#include "rgbModes.h"
+#include "rgbModes.h"   // Se asume que define las constantes: WHITE, RED, GREEN, BLUE, YELLOW, CYAN, MAGENTA, ORANGE, PINK, VIOLET, BROWN, GREY, OLIVE_GREEN, MARINE_BLUE, LIGHT_BLUE, GOLD, FADE
+#include "colors.h"     // Header file con las funciones: white(), red(), green(), blue(), yellow(), cyan(), magenta(), orange(), pink(), violet(), brown(), gray(), olive(), navy(), turquoise(), gold()
 
+// Pines de salida
 #define GREEN_LED D5
-#define RED_LED D4
-#define BLUE_LED D3
+#define RED_LED   D4
+#define BLUE_LED  D3
 #define statusLed D1
 
+// Declaración de funciones
 void manageModes();
 void fade();
 void manageStep(int side);
+void manageRequests(WiFiClient client);
+void controlColors();
+void controlStrobeColor(int color);
+void strobe();
 
-int mode = FADE;
+// Modo de funcionamiento (por defecto FADE)
+int mode = FADE;  
 
-// Brillo de cada LED
+// Variables para el brillo de cada LED (valor entre 0 y 255)
 int brightnessGreen = 0;
-int brightnessBlue = 0;
-int brightnessRed = 0;
+int brightnessBlue  = 0;
+int brightnessRed   = 0;
+int maxBrightness   = 255;
 
-int step = 2;  // Tamaño del incremento
+// **Multiplicadores para corregir el brillo de cada canal**
+// Se pueden modificar desde el HTML
+float redAdj   = 1.0;
+float greenAdj = 0.5;
+float blueAdj  = 1.0;
+
+int step = 2;           // Tamaño del incremento para fade
 int stepIncrement = 2;
+const int maxStep = 100;
+unsigned long previousTime;
 
-int enable = 1; // 0 indica todo apagado, 1 indica que se habilitan los modos
+int strobeColor = WHITE;
 
-const char* ssid = WIFI_SSID;      // Nombre de la red WiFi
-const char* password = WIFI_PASS;  // Contraseña de la red WiFi
+// Variable para habilitar o deshabilitar el modo
+int enable = 1; // 0: todo apagado, 1: habilitar modos
 
-//En lo siguiente reemplaza puntos por comas
-IPAddress local_IP(192, 168, 0, 222);  // Cambia a una IP dentro del rango de tu red
-IPAddress gateway(192, 168, 0, 1);     // La puerta de enlace suele ser la dirección del router
+// Datos de la red WiFi
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASS;
+
+// Configuración IP estática (reemplaza puntos por comas)
+IPAddress local_IP(192, 168, 0, 222);
+IPAddress gateway(192, 168, 0, 1);
 IPAddress subnet(255, 255, 255, 0);
 
 WiFiServer server(80);
 
+// HTML con los botones y formulario para editar multiplicadores
 const char* htmlContent = R"rawliteral(
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Control del LED</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-  </head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Control del LED</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
 <body>
   <h1>Control del LED</h1>
-  <p><a href="/ON" ><button class="btn btn-primary" type="button">Encender</button></a></p>
+  <p><a href="/ON"><button class="btn btn-primary" type="button">Encender</button></a></p>
   <p><a href="/OFF"><button class="btn btn-primary" type="button">Apagar</button></a></p>
   <p><a href="/FADE"><button class="btn btn-primary" type="button">Fade</button></a></p>
-  <p><a href="/INCREMENT" ><button class="btn btn-primary" type="button">Subir Velocidad</button></a></p>
-  <p><a href="/DECREMENT" ><button class="btn btn-primary" type="button">Bajar Velocidad</button></a></p>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+  <p><a href="/STROBE"><button class="btn btn-primary" type="button">Strobe</button></a></p>
+  <p><a href="/INCREMENT"><button class="btn btn-primary" type="button">Subir Velocidad</button></a></p>
+  <p><a href="/DECREMENT"><button class="btn btn-primary" type="button">Bajar Velocidad</button></a></p>
+  <hr>
+  <p><a href="/RED"><button class="btn btn-danger" type="button">RED</button></a></p>
+  <p><a href="/GREEN"><button class="btn btn-success" type="button">GREEN</button></a></p>
+  <p><a href="/BLUE"><button class="btn btn-primary" type="button">BLUE</button></a></p>
+  <p><a href="/WHITE"><button class="btn btn-light" type="button">WHITE</button></a></p>
+  <p><a href="/YELLOW"><button class="btn btn-warning" type="button">YELLOW</button></a></p>
+  <p><a href="/CYAN"><button class="btn btn-info" type="button">CYAN</button></a></p>
+  <p><a href="/MAGENTA"><button class="btn" style="background-color: magenta; border-color: magenta; color: white;" type="button">MAGENTA</button></a></p>
+  <p><a href="/ORANGE"><button class="btn" style="background-color: orange; border-color: orange; color: white;" type="button">ORANGE</button></a></p>
+  <p><a href="/PINK"><button class="btn" style="background-color: pink; border-color: pink; color: black;" type="button">PINK</button></a></p>
+  <p><a href="/VIOLET"><button class="btn" style="background-color: violet; border-color: violet; color: white;" type="button">VIOLET</button></a></p>
+  <p><a href="/BROWN"><button class="btn" style="background-color: brown; border-color: brown; color: white;" type="button">BROWN</button></a></p>
+  <p><a href="/GREY"><button class="btn btn-secondary" type="button">GREY</button></a></p>
+  <p><a href="/OLIVE_GREEN"><button class="btn" style="background-color: olive; border-color: olive; color: white;" type="button">OLIVE GREEN</button></a></p>
+  <p><a href="/MARINE_BLUE"><button class="btn" style="background-color: navy; border-color: navy; color: white;" type="button">MARINE BLUE</button></a></p>
+  <p><a href="/LIGHT_BLUE"><button class="btn" style="background-color: lightblue; border-color: lightblue; color: black;" type="button">LIGHT BLUE</button></a></p>
+  <p><a href="/GOLD"><button class="btn" style="background-color: gold; border-color: gold; color: black;" type="button">GOLD</button></a></p>
+  <hr>
+  <h2>Ajuste de multiplicadores</h2>
+  <form action="/setAdj">
+    <div class="mb-3">
+      <label for="red" class="form-label">Red Multiplier:</label>
+      <input type="number" step="0.01" id="red" name="red" class="form-control" value="1.00">
+    </div>
+    <div class="mb-3">
+      <label for="green" class="form-label">Green Multiplier:</label>
+      <input type="number" step="0.01" id="green" name="green" class="form-control" value="0.75">
+    </div>
+    <div class="mb-3">
+      <label for="blue" class="form-label">Blue Multiplier:</label>
+      <input type="number" step="0.01" id="blue" name="blue" class="form-control" value="1.00">
+    </div>
+    <button type="submit" class="btn btn-secondary">Actualizar Multiplicadores</button>
+  </form>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
 )rawliteral";
@@ -69,19 +126,17 @@ void setup() {
   pinMode(BLUE_LED, OUTPUT);
   pinMode(statusLed, OUTPUT);
 
-  // Configurar IP estática
   if (!WiFi.config(local_IP, gateway, subnet)) {
     Serial.println("Error al configurar la IP estática");
   }
 
-  // Conectar al WiFi
   Serial.print("Conectando a ");
   Serial.println(ssid);
   WiFi.begin(ssid, password);
 
   unsigned long startTime = millis();
   while (WiFi.status() != WL_CONNECTED) {
-    if (millis() - startTime > 15000) {  // 15 segundos de espera
+    if (millis() - startTime > 15000) {
       Serial.println("No se pudo conectar al WiFi. Reiniciando...");
       ESP.restart();
     }
@@ -92,43 +147,22 @@ void setup() {
     Serial.println("Estado de conexión: " + String(WiFi.status()));
   }
 
-
   Serial.println();
   Serial.println("Conectado al WiFi");
   Serial.print("Dirección IP: ");
   Serial.println(WiFi.localIP());
   server.begin();
+
+  previousTime = millis();
 }
 
 void loop() {
   WiFiClient client = server.available();
   if (client) {
-    while (!client.available()) {
-      delay(1);
-    }
-
-    String request = client.readStringUntil('\r');
-    Serial.println(request);
-    client.flush();
-
-    if (request.indexOf("/OFF") != -1) {
-      enable = 0;
-    } else if (request.indexOf("/ON") != -1) {
-      enable = 1;
-    } else if (request.indexOf("/FADE") != -1) {
-      if (enable) mode = FADE;
-    } else if (request.indexOf("/INCREMENT") != -1) {
-      manageStep(1);
-      //Serial.println(step);
-    } else if (request.indexOf("/DECREMENT") != -1) {
-      manageStep(-1);
-      //Serial.println(step);
-    }
-
-    client.println(htmlContent);
+    manageRequests(client);
   }
 
-  if (enable){
+  if (enable) {
     manageModes();
   } else {
     brightnessGreen = 0;
@@ -136,33 +170,261 @@ void loop() {
     brightnessBlue = 0;
   }
     
-  analogWrite(GREEN_LED, brightnessGreen);
-  analogWrite(RED_LED, brightnessRed);
-  analogWrite(BLUE_LED, brightnessBlue);
+  controlColors();
+}
+
+void manageRequests(WiFiClient client) {
+  while (!client.available()) {
+    delay(1);
+  }
+  String request = client.readStringUntil('\r');
+  Serial.println(request);
+  client.flush();
+
+  // Se revisan las rutas para los modos
+  if (request.indexOf("/OFF") != -1) {
+    enable = 0;
+    return;
+  } else if (request.indexOf("/ON") != -1) {
+    enable = 1;
+    return;
+  }
+
+  if (enable){
+    if (request.indexOf("/FADE") != -1) {
+      mode = FADE;
+    } else if (request.indexOf("/STROBE") != -1) {
+      mode = STROBE;
+    } else if (request.indexOf("/RED") != -1) {
+      mode = RED;
+    } else if (request.indexOf("/GREEN") != -1) {
+      mode = GREEN;
+    } else if (request.indexOf("/BLUE") != -1) {
+      mode = BLUE;
+    } else if (request.indexOf("/WHITE") != -1) {
+      mode = WHITE;
+    } else if (request.indexOf("/YELLOW") != -1) {
+      mode = YELLOW;
+    } else if (request.indexOf("/CYAN") != -1) {
+      mode = CYAN;
+    } else if (request.indexOf("/MAGENTA") != -1) {
+      mode = MAGENTA;
+    } else if (request.indexOf("/ORANGE") != -1) {
+      mode = ORANGE;
+    } else if (request.indexOf("/PINK") != -1) {
+      mode = PINK;
+    } else if (request.indexOf("/VIOLET") != -1) {
+      mode = VIOLET;
+    } else if (request.indexOf("/BROWN") != -1) {
+      mode = BROWN;
+    } else if (request.indexOf("/GREY") != -1) {
+      mode = GRAY;
+    } else if (request.indexOf("/OLIVE_GREEN") != -1) {
+      mode = OLIVE_GREEN;
+    } else if (request.indexOf("/MARINE_BLUE") != -1) {
+      mode = NAVY_BLUE;
+    } else if (request.indexOf("/LIGHT_BLUE") != -1) {
+      mode = LIGHT_BLUE;
+    } else if (request.indexOf("/GOLD") != -1) {
+      mode = GOLD;
+    } else if (request.indexOf("/INCREMENT") != -1) {
+      manageStep(1);
+    } else if (request.indexOf("/DECREMENT") != -1) {
+      manageStep(-1);
+    } else if (request.indexOf("/setAdj") != -1) {
+      // Se espera recibir parámetros en formato:
+      // /setAdj?red=1.00&green=0.75&blue=1.00
+      int redIndex = request.indexOf("red=");
+      int greenIndex = request.indexOf("green=");
+      int blueIndex = request.indexOf("blue=");
+      
+      if(redIndex != -1) {
+        int redEnd = request.indexOf('&', redIndex);
+        if(redEnd == -1) redEnd = request.indexOf(' ', redIndex);
+        String redValue = request.substring(redIndex + 4, redEnd);
+        redAdj = redValue.toFloat();
+      }
+      if(greenIndex != -1) {
+        int greenEnd = request.indexOf('&', greenIndex);
+        if(greenEnd == -1) greenEnd = request.indexOf(' ', greenIndex);
+        String greenValue = request.substring(greenIndex + 6, greenEnd);
+        greenAdj = greenValue.toFloat();
+      }
+      if(blueIndex != -1) {
+        int blueEnd = request.indexOf('&', blueIndex);
+        if(blueEnd == -1) blueEnd = request.indexOf(' ', blueIndex);
+        String blueValue = request.substring(blueIndex + 5, blueEnd);
+        blueAdj = blueValue.toFloat();
+      }
+    }
+  }
+
+  client.println(htmlContent);
 }
 
 void manageModes() {
-  if (mode == FADE) {
-    fade();
+  switch (mode) {
+    case RED:
+      red();
+      break;
+    case GREEN:
+      green();
+      break;
+    case BLUE:
+      blue();
+      break;
+    case WHITE:
+      white();
+      break;
+    case YELLOW:
+      yellow();
+      break;
+    case CYAN:
+      cyan();
+      break;
+    case MAGENTA:
+      magenta();
+      break;
+    case ORANGE:
+      orange();
+      break;
+    case PINK:
+      pink();
+      break;
+    case VIOLET:
+      violet();
+      break;
+    case BROWN:
+      brown();
+      break;
+    case GRAY:
+      gray();
+      break;
+    case OLIVE_GREEN:
+      olive();
+      break;
+    case NAVY_BLUE:
+      navy();
+      break;
+    case LIGHT_BLUE:
+      turquoise();
+      break;
+    case GOLD:
+      gold();
+      break;
+    case FADE:
+      fade();
+      break;
+    case STROBE:
+      strobe();
+      break;
+    default:
+      break;
   }
+}
+
+void manageStep(int side) { // side = 1 para incrementar, -1 para decrementar
+  if (step > 0 && step + side * stepIncrement != 0) {
+    step += side * stepIncrement;
+  } else if (step < 0 && step - side * stepIncrement != 0) {
+    step -= side * stepIncrement;
+  }
+  if (step > maxStep) {
+    step = maxStep;
+  } else if (step < -maxStep) {
+    step = -maxStep;
+  }
+}
+
+// Función que aplica los multiplicadores a los valores de brillo y actualiza los pines.
+// Se limita el valor máximo a 255.
+void controlColors() {
+  int adjRed = brightnessRed * redAdj;
+  if (adjRed > 255) adjRed = 255;
+  int adjGreen = brightnessGreen * greenAdj;
+  if (adjGreen > 255) adjGreen = 255;
+  int adjBlue = brightnessBlue * blueAdj;
+  if (adjBlue > 255) adjBlue = 255;
+
+  analogWrite(RED_LED, adjRed);
+  analogWrite(GREEN_LED, adjGreen);
+  analogWrite(BLUE_LED, adjBlue);
 }
 
 void fade() {
-  brightnessRed += step;
+  brightnessRed   += step;
   brightnessGreen += step;
-  brightnessBlue += step;
-
+  brightnessBlue  += step;
   if (brightnessRed >= 255 || brightnessRed <= 0) {
     step = -step;  // Invierte la dirección
   }
-
   delay(30);  // Controla la velocidad del fade
 }
 
-void manageStep(int side){ // Si side == 1 incrementa, si es -1 decrementa
-  if (step > 0 && step + side * stepIncrement != 0){
-    step += side * stepIncrement;
-  } else if (step < 0 && step - side * stepIncrement != 0){
-    step -= side * stepIncrement;
+void strobe(){
+  int actualTime = millis();
+  int elapsedTime = actualTime - previousTime;
+
+  if (elapsedTime >= step * 100){
+    previousTime = actualTime;
+    strobeColor++;
+    if (strobeColor > GOLD){
+      strobeColor = WHITE;
+    }
+    controlStrobeColor(strobeColor);
   }
 }
+
+void controlStrobeColor(int color){
+  switch (color){
+    case RED:
+      red();
+      break;
+    case GREEN:
+      green();
+      break;
+    case BLUE:
+      blue();
+      break;
+    case WHITE:
+      white();
+      break;
+    case YELLOW:
+      yellow();
+      break;
+    case CYAN:
+      cyan();
+      break;
+    case MAGENTA:
+      magenta();
+      break;
+    case ORANGE:
+      orange();
+      break;
+    case PINK:
+      pink();
+      break;
+    case VIOLET:
+      violet();
+      break;
+    case BROWN:
+      brown();
+      break;
+    case GRAY:
+      gray();
+      break;
+    case OLIVE_GREEN:
+      olive();
+      break;
+    case NAVY_BLUE:
+      navy();
+      break;
+    case LIGHT_BLUE:
+      turquoise();
+      break;
+    case GOLD:
+      gold();
+      break;
+  }
+}
+

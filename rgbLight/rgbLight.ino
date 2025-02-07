@@ -1,17 +1,26 @@
+#include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include "config.h"
 
-const char* ssid = ""; // Nombre de la red WiFi
-const char* password = ""; // Contraseña de la red WiFi
+#define ledPin D5
+#define statusLed D1
+
+int mode = 1;
+int brightness = 0;
+int step = 5;  // Tamaño del incremento
+
+const char* ssid = WIFI_SSID;      // Nombre de la red WiFi
+const char* password = WIFI_PASS;  // Contraseña de la red WiFi
 
 //En lo siguiente reemplaza puntos por comas
-IPAddress local_IP(); // Cambia a una IP dentro del rango de tu red
-IPAddress gateway();    // La puerta de enlace suele ser la dirección del router
-IPAddress subnet();
-
-const int ledPin = D5; // Pin donde está conectado el LED
-const int statusLed = D1;
+IPAddress local_IP(192,168,0,222);  // Cambia a una IP dentro del rango de tu red
+IPAddress gateway(192, 168, 0, 1);     // La puerta de enlace suele ser la dirección del router
+IPAddress subnet(255, 255, 255, 0);
 
 WiFiServer server(80);
+
+void manageModes();
+void fade();
 
 const char* htmlContent = R"rawliteral(
 <!DOCTYPE html>
@@ -24,24 +33,26 @@ const char* htmlContent = R"rawliteral(
   </head>
 <body>
   <h1>Control del LED</h1>
-  <p><a href="/LED=ON" ><button class="btn btn-primary" type="button">Encender</button></a></p>
-  <p><a href="/LED=OFF"><button class="btn btn-primary" type="button">Apagar</button></a></p>
+  <p><a href="/ON" ><button class="btn btn-primary" type="button">Encender</button></a></p>
+  <p><a href="/OFF"><button class="btn btn-primary" type="button">Apagar</button></a></p>
+  <p><a href="/FADE"><button class="btn btn-primary" type="button">Fade</button></a></p>
+  <p><a href="/INCREMENT" ><button class="btn btn-primary" type="button">Subir Velocidad</button></a></p>
+  <p><a href="/DECREMENT" ><button class="btn btn-primary" type="button">Bajar Velocidad</button></a></p>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 </body>
 </html>
 )rawliteral";
 
-void setup() 
-{
+void setup() {
   Serial.begin(9600);
   delay(10);
 
   pinMode(ledPin, OUTPUT);
   pinMode(statusLed, OUTPUT);
-  digitalWrite(ledPin, LOW); // LED apagado al inicio
+  digitalWrite(ledPin, LOW);  // LED apagado al inicio
 
   // Configurar IP estática
-  if (!WiFi.config(local_IP, gateway, subnet)) 
+  if (!WiFi.config(local_IP, gateway, subnet))
   {
     Serial.println("Error al configurar la IP estática");
   }
@@ -51,14 +62,19 @@ void setup()
   Serial.println(ssid);
   WiFi.begin(ssid, password);
 
-  while (WiFi.status() != WL_CONNECTED) 
-  {
-    digitalWrite(statusLed, LOW);
-    delay(182);
-    digitalWrite(statusLed, HIGH);
-    delay(182);
-    Serial.print(".");
+  unsigned long startTime = millis();
+  while (WiFi.status() != WL_CONNECTED) {
+      if (millis() - startTime > 15000) {  // 15 segundos de espera
+          Serial.println("No se pudo conectar al WiFi. Reiniciando...");
+          ESP.restart();
+      }
+      digitalWrite(statusLed, LOW);
+      delay(200);
+      digitalWrite(statusLed, HIGH);
+      delay(200);
+      Serial.println("Estado de conexión: " + String(WiFi.status()));
   }
+
 
   Serial.println();
   Serial.println("Conectado al WiFi");
@@ -67,34 +83,54 @@ void setup()
   server.begin();
 }
 
-void loop() 
-{
+void loop() {
   WiFiClient client = server.available();
-  if (!client) 
-  {
-    return;
+  if (client) {
+    while (!client.available()) {
+      delay(1);
+    }
+
+    String request = client.readStringUntil('\r');
+    Serial.println(request);
+    client.flush();
+
+    if (request.indexOf("/OFF") != -1) {
+      mode = 0;
+    } else if (request.indexOf("/ON") != -1) {
+      mode = 1;
+    } else if (request.indexOf("/FADE") != -1) {
+      mode = 2;
+    } else if (request.indexOf("/INCREMENT") != -1){
+      step++;
+      Serial.println(step);
+    } else if (request.indexOf("/DECREMENT") != -1){
+      step--;
+      Serial.println(step);
+    }
+
+    client.println(htmlContent);
   }
 
-  // Esperar a que el cliente envíe datos
-  while(!client.available()) 
-  {
-    delay(1);
+  manageModes();
+}
+
+void manageModes(){
+  if (mode == 0) {
+    analogWrite(ledPin, 0);
+  } else if (mode == 1) {
+    analogWrite(ledPin, 255);
+  } else if (mode == 2) {
+    fade();  // Ahora se llama continuamente en loop()
+  }
+}
+
+void fade() {
+  analogWrite(ledPin, brightness);
+  brightness += step;
+
+  if (brightness >= 255 || brightness <= 0) {
+    step = -step;  // Invierte la dirección
   }
 
-  String request = client.readStringUntil('\r');
-  Serial.println(request);
-  client.flush();
-
-  // Comprobar la solicitud
-  if (request.indexOf("/LED=ON") != -1) 
-  {
-    digitalWrite(ledPin, HIGH); // Enciende el LED
-  } 
-  else if (request.indexOf("/LED=OFF") != -1) 
-  {
-    digitalWrite(ledPin, LOW); // Apaga el LED
-  }
-
-  // Respuesta HTML al cliente
-  client.println(htmlContent);
+  delay(30);  // Controla la velocidad del fade
 }

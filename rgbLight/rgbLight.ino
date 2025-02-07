@@ -1,26 +1,43 @@
+// Resistencias
+// Rc = 220ohm
+// Rb = 15kohm
+// Transistores BC550B
+
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include "config.h"
+#include "rgbModes.h"
 
-#define ledPin D5
+#define GREEN_LED D5
+#define RED_LED D4
+#define BLUE_LED D3
 #define statusLed D1
 
-int mode = 1;
-int brightness = 0;
-int step = 5;  // Tamaño del incremento
+void manageModes();
+void fade();
+void manageStep(int side);
+
+int mode = FADE;
+
+// Brillo de cada LED
+int brightnessGreen = 0;
+int brightnessBlue = 0;
+int brightnessRed = 0;
+
+int step = 2;  // Tamaño del incremento
+int stepIncrement = 2;
+
+int enable = 1; // 0 indica todo apagado, 1 indica que se habilitan los modos
 
 const char* ssid = WIFI_SSID;      // Nombre de la red WiFi
 const char* password = WIFI_PASS;  // Contraseña de la red WiFi
 
 //En lo siguiente reemplaza puntos por comas
-IPAddress local_IP(192,168,0,222);  // Cambia a una IP dentro del rango de tu red
+IPAddress local_IP(192, 168, 0, 222);  // Cambia a una IP dentro del rango de tu red
 IPAddress gateway(192, 168, 0, 1);     // La puerta de enlace suele ser la dirección del router
 IPAddress subnet(255, 255, 255, 0);
 
 WiFiServer server(80);
-
-void manageModes();
-void fade();
 
 const char* htmlContent = R"rawliteral(
 <!DOCTYPE html>
@@ -47,13 +64,13 @@ void setup() {
   Serial.begin(9600);
   delay(10);
 
-  pinMode(ledPin, OUTPUT);
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(BLUE_LED, OUTPUT);
   pinMode(statusLed, OUTPUT);
-  digitalWrite(ledPin, LOW);  // LED apagado al inicio
 
   // Configurar IP estática
-  if (!WiFi.config(local_IP, gateway, subnet))
-  {
+  if (!WiFi.config(local_IP, gateway, subnet)) {
     Serial.println("Error al configurar la IP estática");
   }
 
@@ -64,15 +81,15 @@ void setup() {
 
   unsigned long startTime = millis();
   while (WiFi.status() != WL_CONNECTED) {
-      if (millis() - startTime > 15000) {  // 15 segundos de espera
-          Serial.println("No se pudo conectar al WiFi. Reiniciando...");
-          ESP.restart();
-      }
-      digitalWrite(statusLed, LOW);
-      delay(200);
-      digitalWrite(statusLed, HIGH);
-      delay(200);
-      Serial.println("Estado de conexión: " + String(WiFi.status()));
+    if (millis() - startTime > 15000) {  // 15 segundos de espera
+      Serial.println("No se pudo conectar al WiFi. Reiniciando...");
+      ESP.restart();
+    }
+    digitalWrite(statusLed, LOW);
+    delay(200);
+    digitalWrite(statusLed, HIGH);
+    delay(200);
+    Serial.println("Estado de conexión: " + String(WiFi.status()));
   }
 
 
@@ -95,42 +112,57 @@ void loop() {
     client.flush();
 
     if (request.indexOf("/OFF") != -1) {
-      mode = 0;
+      enable = 0;
     } else if (request.indexOf("/ON") != -1) {
-      mode = 1;
+      enable = 1;
     } else if (request.indexOf("/FADE") != -1) {
-      mode = 2;
-    } else if (request.indexOf("/INCREMENT") != -1){
-      step++;
-      Serial.println(step);
-    } else if (request.indexOf("/DECREMENT") != -1){
-      step--;
-      Serial.println(step);
+      if (enable) mode = FADE;
+    } else if (request.indexOf("/INCREMENT") != -1) {
+      manageStep(1);
+      //Serial.println(step);
+    } else if (request.indexOf("/DECREMENT") != -1) {
+      manageStep(-1);
+      //Serial.println(step);
     }
 
     client.println(htmlContent);
   }
 
-  manageModes();
+  if (enable){
+    manageModes();
+  } else {
+    brightnessGreen = 0;
+    brightnessRed = 0;
+    brightnessBlue = 0;
+  }
+    
+  analogWrite(GREEN_LED, brightnessGreen);
+  analogWrite(RED_LED, brightnessRed);
+  analogWrite(BLUE_LED, brightnessBlue);
 }
 
-void manageModes(){
-  if (mode == 0) {
-    analogWrite(ledPin, 0);
-  } else if (mode == 1) {
-    analogWrite(ledPin, 255);
-  } else if (mode == 2) {
-    fade();  // Ahora se llama continuamente en loop()
+void manageModes() {
+  if (mode == FADE) {
+    fade();
   }
 }
 
 void fade() {
-  analogWrite(ledPin, brightness);
-  brightness += step;
+  brightnessRed += step;
+  brightnessGreen += step;
+  brightnessBlue += step;
 
-  if (brightness >= 255 || brightness <= 0) {
+  if (brightnessRed >= 255 || brightnessRed <= 0) {
     step = -step;  // Invierte la dirección
   }
 
   delay(30);  // Controla la velocidad del fade
+}
+
+void manageStep(int side){ // Si side == 1 incrementa, si es -1 decrementa
+  if (step > 0 && step + side * stepIncrement != 0){
+    step += side * stepIncrement;
+  } else if (step < 0 && step - side * stepIncrement != 0){
+    step -= side * stepIncrement;
+  }
 }

@@ -99,64 +99,108 @@ WiFiServer server(80);
 // HTML con los botones y formulario para editar multiplicadores
 const char* htmlContent = R"rawliteral(
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Control del LED</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f4f4f9;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      margin-top: 20px;
+    }
+    h2 {
+      text-align: center;
+      margin-top: 40px;
+    }
+    .btn {
+      font-size: 16px;
+      margin: 10px;
+      width: 200px;
+    }
+    .button-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .button-container p {
+      margin: 0;
+    }
+    hr {
+      margin: 20px 0;
+    }
+    .form-container {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+  </style>
 </head>
 <body>
   <h1>Control del LED</h1>
-  <p><a href="/ON"><button class="btn btn-primary" type="button">Encender</button></a></p>
-  <p><a href="/OFF"><button class="btn btn-primary" type="button">Apagar</button></a></p>
+  <div class="button-container">
+    <p><a href="/ON"><button class="btn btn-primary" type="button">Encender</button></a></p>
+    <p><a href="/OFF"><button class="btn btn-danger" type="button">Apagar</button></a></p>
+    <p><a href="/FADE"><button class="btn btn-info" type="button">Respiración</button></a></p>
+    <p><a href="/ALTERNATEFADE"><button class="btn btn-warning" type="button">Fade</button></a></p>
+    <p><a href="/STROBE"><button class="btn btn-dark" type="button">Strobe</button></a></p>
+  </div>
   <hr>
-  <p><a href="/FADE"><button class="btn btn-primary" type="button">Fade</button></a></p>
-  <p><a href="/ALTERNATEFADE"><button class="btn btn-primary" type="button">Fade de Varios Colores</button></a></p>
-  <p><a href="/STROBE"><button class="btn btn-primary" type="button">Strobe</button></a></p>
+  <div class="button-container">
+    <p><a href="/INCREMENT"><button class="btn btn-success" type="button">Subir Velocidad</button></a></p>
+    <p><a href="/DECREMENT"><button class="btn btn-secondary" type="button">Bajar Velocidad</button></a></p>
+    <p><a href="/LIGHTER"><button class="btn btn-light" type="button">Subir Brillo</button></a></p>
+    <p><a href="/DARKER"><button class="btn btn-dark" type="button">Bajar Brillo</button></a></p>
+  </div>
   <hr>
-  <p><a href="/INCREMENT"><button class="btn btn-primary" type="button">Subir Velocidad</button></a></p>
-  <p><a href="/DECREMENT"><button class="btn btn-primary" type="button">Bajar Velocidad</button></a></p>
-  <p><a href="/LIGHTER"><button class="btn btn-primary" type="button">Subir Brillo</button></a></p>
-  <p><a href="/DARKER"><button class="btn btn-primary" type="button">Bajar Brillo</button></a></p>
-  <hr>
-  <p><a href="/RED"><button class="btn btn-danger" type="button">RED</button></a></p>
-  <p><a href="/GREEN"><button class="btn btn-success" type="button">GREEN</button></a></p>
-  <p><a href="/BLUE"><button class="btn btn-primary" type="button">BLUE</button></a></p>
-  <p><a href="/WHITE"><button class="btn btn-light" type="button">WHITE</button></a></p>
-  <p><a href="/YELLOW"><button class="btn btn-warning" type="button">YELLOW</button></a></p>
-  <p><a href="/CYAN"><button class="btn btn-info" type="button">CYAN</button></a></p>
-  <p><a href="/MAGENTA"><button class="btn" style="background-color: magenta; border-color: magenta; color: white;" type="button">MAGENTA</button></a></p>
-  <p><a href="/ORANGE"><button class="btn" style="background-color: orange; border-color: orange; color: white;" type="button">ORANGE</button></a></p>
-  <p><a href="/PINK"><button class="btn" style="background-color: pink; border-color: pink; color: black;" type="button">PINK</button></a></p>
-  <p><a href="/VIOLET"><button class="btn" style="background-color: violet; border-color: violet; color: white;" type="button">VIOLET</button></a></p>
-  <p><a href="/BROWN"><button class="btn" style="background-color: brown; border-color: brown; color: white;" type="button">BROWN</button></a></p>
-  <p><a href="/GREY"><button class="btn btn-secondary" type="button">GREY</button></a></p>
-  <p><a href="/OLIVE_GREEN"><button class="btn" style="background-color: olive; border-color: olive; color: white;" type="button">OLIVE GREEN</button></a></p>
-  <p><a href="/MARINE_BLUE"><button class="btn" style="background-color: navy; border-color: navy; color: white;" type="button">MARINE BLUE</button></a></p>
-  <p><a href="/LIGHT_BLUE"><button class="btn" style="background-color: lightblue; border-color: lightblue; color: black;" type="button">LIGHT BLUE</button></a></p>
-  <p><a href="/GOLD"><button class="btn" style="background-color: gold; border-color: gold; color: black;" type="button">GOLD</button></a></p>
+  <div class="button-container">
+    <p><a href="/RED"><button class="btn btn-danger" type="button">RED</button></a></p>
+    <p><a href="/GREEN"><button class="btn btn-success" type="button">GREEN</button></a></p>
+    <p><a href="/BLUE"><button class="btn btn-primary" type="button">BLUE</button></a></p>
+    <p><a href="/WHITE"><button class="btn btn-light" type="button">WHITE</button></a></p>
+    <p><a href="/YELLOW"><button class="btn btn-warning" type="button">YELLOW</button></a></p>
+    <p><a href="/CYAN"><button class="btn btn-info" type="button">CYAN</button></a></p>
+    <p><a href="/MAGENTA"><button class="btn" style="background-color: magenta; border-color: magenta; color: white;" type="button">MAGENTA</button></a></p>
+    <p><a href="/ORANGE"><button class="btn" style="background-color: orange; border-color: orange; color: white;" type="button">ORANGE</button></a></p>
+    <p><a href="/PINK"><button class="btn" style="background-color: pink; border-color: pink; color: black;" type="button">PINK</button></a></p>
+    <p><a href="/VIOLET"><button class="btn" style="background-color: violet; border-color: violet; color: white;" type="button">VIOLET</button></a></p>
+    <p><a href="/BROWN"><button class="btn" style="background-color: brown; border-color: brown; color: white;" type="button">BROWN</button></a></p>
+    <p><a href="/GREY"><button class="btn btn-secondary" type="button">GREY</button></a></p>
+    <p><a href="/OLIVE_GREEN"><button class="btn" style="background-color: olive; border-color: olive; color: white;" type="button">OLIVE GREEN</button></a></p>
+    <p><a href="/MARINE_BLUE"><button class="btn" style="background-color: navy; border-color: navy; color: white;" type="button">MARINE BLUE</button></a></p>
+    <p><a href="/LIGHT_BLUE"><button class="btn" style="background-color: lightblue; border-color: lightblue; color: black;" type="button">LIGHT BLUE</button></a></p>
+    <p><a href="/GOLD"><button class="btn" style="background-color: gold; border-color: gold; color: black;" type="button">GOLD</button></a></p>
+  </div>
   <hr>
   <h2>Ajuste de multiplicadores</h2>
-  <form action="/setAdj">
-    <div class="mb-3">
-      <label for="red" class="form-label">Red Multiplier:</label>
-      <input type="number" step="0.01" id="red" name="red" class="form-control" value="1.00">
-    </div>
-    <div class="mb-3">
-      <label for="green" class="form-label">Green Multiplier:</label>
-      <input type="number" step="0.01" id="green" name="green" class="form-control" value="0.75">
-    </div>
-    <div class="mb-3">
-      <label for="blue" class="form-label">Blue Multiplier:</label>
-      <input type="number" step="0.01" id="blue" name="blue" class="form-control" value="1.00">
-    </div>
-    <button type="submit" class="btn btn-secondary">Actualizar Multiplicadores</button>
-  </form>
+  <div class="form-container">
+    <form action="/setAdj">
+      <div class="mb-3">
+        <label for="red" class="form-label">Red Multiplier:</label>
+        <input type="number" step="0.01" id="red" name="red" class="form-control" value="1.00">
+      </div>
+      <div class="mb-3">
+        <label for="green" class="form-label">Green Multiplier:</label>
+        <input type="number" step="0.01" id="green" name="green" class="form-control" value="0.75">
+      </div>
+      <div class="mb-3">
+        <label for="blue" class="form-label">Blue Multiplier:</label>
+        <input type="number" step="0.01" id="blue" name="blue" class="form-control" value="1.00">
+      </div>
+      <button type="submit" class="btn btn-secondary">Actualizar Multiplicadores</button>
+    </form>
+  </div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
 )rawliteral";
+
 
 void setup() {
   Serial.begin(9600);

@@ -21,17 +21,19 @@ void fade();
 void manageStep(int side);
 void manageRequests(WiFiClient client);
 void controlColors();
-void controlStrobeColor(int color);
+void controlModeColor(int color);
 void strobe();
+void controlMaxBrightness(int side);
 
 // Modo de funcionamiento (por defecto FADE)
-int mode = FADE;  
+int mode = WHITE;  
 
 // Variables para el brillo de cada LED (valor entre 0 y 255)
 int brightnessGreen = 0;
 int brightnessBlue  = 0;
 int brightnessRed   = 0;
 int maxBrightness   = 255;
+int maxUserBrightness = 255;
 
 // **Multiplicadores para corregir el brillo de cada canal**
 // Se pueden modificar desde el HTML
@@ -40,9 +42,11 @@ float greenAdj = 0.5;
 float blueAdj  = 1.0;
 
 int step = 2;           // Tamaño del incremento para fade
-int stepIncrement = 2;
+int stepIncrement = 1;
 const int maxStep = 100;
 unsigned long previousTime;
+bool isFading = true;
+int fadeColor = WHITE;
 
 int strobeColor = WHITE;
 
@@ -78,6 +82,8 @@ const char* htmlContent = R"rawliteral(
   <p><a href="/STROBE"><button class="btn btn-primary" type="button">Strobe</button></a></p>
   <p><a href="/INCREMENT"><button class="btn btn-primary" type="button">Subir Velocidad</button></a></p>
   <p><a href="/DECREMENT"><button class="btn btn-primary" type="button">Bajar Velocidad</button></a></p>
+  <p><a href="/LIGHTER"><button class="btn btn-primary" type="button">Subir Brillo</button></a></p>
+  <p><a href="/DARKER"><button class="btn btn-primary" type="button">Bajar Brillo</button></a></p>
   <hr>
   <p><a href="/RED"><button class="btn btn-danger" type="button">RED</button></a></p>
   <p><a href="/GREEN"><button class="btn btn-success" type="button">GREEN</button></a></p>
@@ -145,6 +151,7 @@ void setup() {
     digitalWrite(statusLed, HIGH);
     delay(200);
     Serial.println("Estado de conexión: " + String(WiFi.status()));
+    pink();
   }
 
   Serial.println();
@@ -184,15 +191,14 @@ void manageRequests(WiFiClient client) {
   // Se revisan las rutas para los modos
   if (request.indexOf("/OFF") != -1) {
     enable = 0;
-    return;
   } else if (request.indexOf("/ON") != -1) {
     enable = 1;
-    return;
   }
 
   if (enable){
     if (request.indexOf("/FADE") != -1) {
-      mode = FADE;
+      isFading = !isFading;
+      maxBrightness = maxUserBrightness;
     } else if (request.indexOf("/STROBE") != -1) {
       mode = STROBE;
     } else if (request.indexOf("/RED") != -1) {
@@ -231,6 +237,10 @@ void manageRequests(WiFiClient client) {
       manageStep(1);
     } else if (request.indexOf("/DECREMENT") != -1) {
       manageStep(-1);
+    } else if (request.indexOf("/LIGHTER") != -1) {
+      controlMaxBrightness(1);
+    } else if (request.indexOf("/DARKER") != -1) {
+      controlMaxBrightness(-1);
     } else if (request.indexOf("/setAdj") != -1) {
       // Se espera recibir parámetros en formato:
       // /setAdj?red=1.00&green=0.75&blue=1.00
@@ -263,70 +273,44 @@ void manageRequests(WiFiClient client) {
 }
 
 void manageModes() {
+  if (mode == STROBE) {
+    isFading = false;
+    strobe();
+    return;
+  }
+
+  if (isFading) {
+    fadeColor = mode;
+    fade();
+    return;
+  }
+
   switch (mode) {
-    case RED:
-      red();
-      break;
-    case GREEN:
-      green();
-      break;
-    case BLUE:
-      blue();
-      break;
-    case WHITE:
-      white();
-      break;
-    case YELLOW:
-      yellow();
-      break;
-    case CYAN:
-      cyan();
-      break;
-    case MAGENTA:
-      magenta();
-      break;
-    case ORANGE:
-      orange();
-      break;
-    case PINK:
-      pink();
-      break;
-    case VIOLET:
-      violet();
-      break;
-    case BROWN:
-      brown();
-      break;
-    case GRAY:
-      gray();
-      break;
-    case OLIVE_GREEN:
-      olive();
-      break;
-    case NAVY_BLUE:
-      navy();
-      break;
-    case LIGHT_BLUE:
-      turquoise();
-      break;
-    case GOLD:
-      gold();
-      break;
-    case FADE:
-      fade();
-      break;
-    case STROBE:
-      strobe();
-      break;
-    default:
-      break;
+    case RED: red(); break;
+    case GREEN: green(); break;
+    case BLUE: blue(); break;
+    case WHITE: white(); break;
+    case YELLOW: yellow(); break;
+    case CYAN: cyan(); break;
+    case MAGENTA: magenta(); break;
+    case ORANGE: orange(); break;
+    case PINK: pink(); break;
+    case VIOLET: violet(); break;
+    case BROWN: brown(); break;
+    case GRAY: gray(); break;
+    case OLIVE_GREEN: olive(); break;
+    case NAVY_BLUE: navy(); break;
+    case LIGHT_BLUE: turquoise(); break;
+    case GOLD: gold(); break;
+    default: break;  // Modo desconocido
   }
 }
 
+
 void manageStep(int side) { // side = 1 para incrementar, -1 para decrementar
-  if (step > 0 && step + side * stepIncrement != 0) {
+  if (step > 1 && step + side * stepIncrement != 0) {
     step += side * stepIncrement;
-  } else if (step < 0 && step - side * stepIncrement != 0) {
+  } else if (step < 1 && step - side * stepIncrement != 0) {
     step -= side * stepIncrement;
   }
   if (step > maxStep) {
@@ -352,30 +336,38 @@ void controlColors() {
 }
 
 void fade() {
-  brightnessRed   += step;
-  brightnessGreen += step;
-  brightnessBlue  += step;
-  if (brightnessRed >= 255 || brightnessRed <= 0) {
-    step = -step;  // Invierte la dirección
+  maxBrightness += step;
+
+  // Verificar límites
+  if (maxBrightness >= maxUserBrightness) {
+    maxBrightness = maxUserBrightness;
+    step *= -1;  // Invertir dirección para comenzar a disminuir
+  } else if (maxBrightness <= 0) {
+    maxBrightness = 0;
+    step *= -1;  // Invertir dirección para comenzar a aumentar
   }
-  delay(30);  // Controla la velocidad del fade
+
+  controlModeColor(fadeColor);
+  
+  delay(10);
 }
+
 
 void strobe(){
   int actualTime = millis();
   int elapsedTime = actualTime - previousTime;
 
-  if (elapsedTime >= step * 100){
+  if (elapsedTime >= 1000 / step){
     previousTime = actualTime;
     strobeColor++;
     if (strobeColor > GOLD){
       strobeColor = WHITE;
     }
-    controlStrobeColor(strobeColor);
+    controlModeColor(strobeColor);
   }
 }
 
-void controlStrobeColor(int color){
+void controlModeColor(int color){
   switch (color){
     case RED:
       red();
@@ -425,6 +417,19 @@ void controlStrobeColor(int color){
     case GOLD:
       gold();
       break;
+  }
+}
+
+void controlMaxBrightness(int side){
+  maxUserBrightness += side * 64;
+  if (maxUserBrightness > 255){
+    maxUserBrightness = 255;
+  } else if (maxUserBrightness < 0){
+    maxUserBrightness = 0;
+  }
+
+  if (!isFading){
+    maxBrightness = maxUserBrightness;
   }
 }
 

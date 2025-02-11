@@ -24,6 +24,7 @@ void controlColors();
 void controlModeColor(int color);
 void strobe();
 void controlMaxBrightness(int side);
+void multipleColorFade();
 
 // Modo de funcionamiento (por defecto FADE)
 int mode = WHITE;  
@@ -47,6 +48,37 @@ const int maxStep = 100;
 unsigned long previousTime;
 bool isFading = true;
 int fadeColor = WHITE;
+
+int fadeColorIndex = WHITE;
+
+// Definición de un struct para representar un color RGB
+struct Color {
+  int r;
+  int g;
+  int b;
+};
+
+// Lista de 15 colores
+Color colorList[] = {
+  {255, 255, 255},  // Blanco
+  {255, 0, 0},     // Rojo
+  {0, 255, 0},     // Verde
+  {0, 0, 255},     // Azul
+  {255, 255, 0},   // Amarillo
+  {0, 255, 255},   // Cyan
+  {255, 0, 255},   // Magenta
+  {255, 165, 0},   // Naranja
+  {255, 192, 203}, // Rosa
+  {238, 130, 238}, // Violeta
+  {165, 42, 42},   // Marrón
+  {128, 128, 128}, // Gris
+  {128, 128, 0},   // Verde Oliva
+  {0, 0, 128},     // Azul Marino
+  {64, 224, 208},  // Turquesa
+  {255, 215, 0}    // Oro
+};
+
+const int numColors = sizeof(colorList) / sizeof(colorList[0]);
 
 int strobeColor = WHITE;
 
@@ -78,8 +110,11 @@ const char* htmlContent = R"rawliteral(
   <h1>Control del LED</h1>
   <p><a href="/ON"><button class="btn btn-primary" type="button">Encender</button></a></p>
   <p><a href="/OFF"><button class="btn btn-primary" type="button">Apagar</button></a></p>
+  <hr>
   <p><a href="/FADE"><button class="btn btn-primary" type="button">Fade</button></a></p>
+  <p><a href="/ALTERNATEFADE"><button class="btn btn-primary" type="button">Fade de Varios Colores</button></a></p>
   <p><a href="/STROBE"><button class="btn btn-primary" type="button">Strobe</button></a></p>
+  <hr>
   <p><a href="/INCREMENT"><button class="btn btn-primary" type="button">Subir Velocidad</button></a></p>
   <p><a href="/DECREMENT"><button class="btn btn-primary" type="button">Bajar Velocidad</button></a></p>
   <p><a href="/LIGHTER"><button class="btn btn-primary" type="button">Subir Brillo</button></a></p>
@@ -233,6 +268,8 @@ void manageRequests(WiFiClient client) {
       mode = LIGHT_BLUE;
     } else if (request.indexOf("/GOLD") != -1) {
       mode = GOLD;
+    } else if (request.indexOf("/ALTERNATEFADE") != -1) {
+      mode = ALTERNATE_FADE;
     } else if (request.indexOf("/INCREMENT") != -1) {
       manageStep(1);
     } else if (request.indexOf("/DECREMENT") != -1) {
@@ -279,6 +316,11 @@ void manageModes() {
     return;
   }
 
+  if (mode == ALTERNATE_FADE){
+    isFading = false;
+    multipleColorFade();
+  }
+
   if (isFading) {
     fadeColor = mode;
     fade();
@@ -303,6 +345,10 @@ void manageModes() {
     case LIGHT_BLUE: turquoise(); break;
     case GOLD: gold(); break;
     default: break;  // Modo desconocido
+  }
+
+  if (step < 0){
+    step *= -1;
   }
 }
 
@@ -430,6 +476,42 @@ void controlMaxBrightness(int side){
 
   if (!isFading){
     maxBrightness = maxUserBrightness;
+  }
+}
+
+void multipleColorFade(){
+  int actualTime = millis();
+  int elapsedTime = actualTime - previousTime;
+
+  if (elapsedTime < 50 / step){
+    return;
+  }
+
+  previousTime = actualTime;
+
+  if (brightnessRed < colorList[fadeColorIndex].r){
+    brightnessRed++;
+  } else if (brightnessRed > colorList[fadeColorIndex].r){
+    brightnessRed--;
+  }
+
+  if (brightnessGreen < colorList[fadeColorIndex].g){
+    brightnessGreen++;
+  } else if (brightnessGreen > colorList[fadeColorIndex].g){
+    brightnessGreen--;
+  }
+
+  if (brightnessBlue < colorList[fadeColorIndex].b){
+    brightnessBlue++;
+  } else if (brightnessBlue > colorList[fadeColorIndex].b){
+    brightnessBlue--;
+  }
+
+  if (brightnessRed == colorList[fadeColorIndex].r && brightnessGreen == colorList[fadeColorIndex].g && brightnessBlue == colorList[fadeColorIndex].b){
+    fadeColorIndex++;
+    if (fadeColorIndex > GOLD){
+      fadeColorIndex = WHITE;
+    }
   }
 }
 
